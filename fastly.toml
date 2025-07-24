@@ -1,0 +1,22 @@
+# This file describes a Fastly Compute package. To learn more visit:
+# https://www.fastly.com/documentation/reference/compute/fastly-toml
+
+authors = ["didomi-team"]
+description = "Boilerplate Fastly Reverse Proxy for Didomi CMP"
+language = "rust"
+manifest_version = 3
+name = "YOUR_SERVICE_NAME"
+service_id = "YOUR_SERVICE_ID"
+
+[local_server]
+
+  [local_server.backends]
+
+    [local_server.backends.didomi_api]
+      url = "https://api.privacy-center.org"
+
+    [local_server.backends.didomi_sdk]
+      url = "https://sdk.privacy-center.org"
+
+[scripts]
+  build = "    cargo build --bin boilerplate-fastly-reverse-proxy-didomi-cmp --release --target wasm32-wasip1 --color always\n"

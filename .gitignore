@@ -1,0 +1,80 @@
+# Rust build artifacts
+/target/
+**/*.rs.bk
+*.pdb
+
+# Cargo
+Cargo.lock
+
+# Fastly CLI artifacts
+/.fastly/
+fastly.toml.bak
+
+# WebAssembly artifacts
+*.wasm
+
+# Package archives
+*.tar.gz
+*.zip
+pkg/
+
+# Environment and configuration
+.env
+.env.local
+.env.*.local
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Node.js (if any JS tooling is used)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# Logs
+*.log
+logs/
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.temp
+/tmp/
+
+# Build outputs
+/dist/
+/build/
+
+# Coverage reports
+/coverage/
+
+# Test artifacts
+/test-results/
+
+# Cache directories
+.cache/
+.parcel-cache/
+
+# Lock files (keep only Cargo.lock for applications)
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# Documentation build
+/docs/build/
