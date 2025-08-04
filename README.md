@@ -1,59 +1,75 @@
-# Didomi reverse proxy - Fastly setup guide
+# Fastly
 
-This guide explains how to configure Fastly Compute@Edge to create a reverse proxy that serves the Didomi Consent notice from your own domain. Two implementation options are available based on your path requirements:
+This guide explains how to configure Fastly Compute@Edge to create a reverse proxy that serves the Didomi Consent notice from your own domain and a subdomain. Two implementation options are available based on your requirements.
+
+[Choose Your Implementation](#choose-your-implementation)
+
+[Implementation guide](#implementation-guide)
 
 ## Choose Your Implementation
 
-### Option A: Direct path routing
+### Option A: Use a subdomain
 
-- **Customer Usage**: `/api/*` and `/sdk/*` paths directly
-- **Architecture**: Fastly with minimal WASM processing
-- **Implementation**: Simple backend routing with lightweight Rust code
+To implement a reverse proxy on a subdomain, you will first create a lightweight Rust application compiled to WebAssembly, then configure Fastly backends and deploy the WASM binary. This approach uses minimal edge processing with simple backend routing.
 
-### Option B: Consent path routing
+<figure><img src="https://1703900661-files.gitbook.io/~/files/v0/b/gitbook-x-prod.appspot.com/o/spaces%2F-LDh8ZWDZrXs8sc4QKEQ%2Fuploads%2FsvStMVZ0GiVpfWjJjwFC%2FServer-side%20Setup%20Miro%20(1).jpg?alt=media&#x26;token=3f7a5b6e-458a-4d06-a2ec-19c11ef7cd96" alt=""><figcaption></figcaption></figure>
 
-- **Customer Usage**: `/consent/*` prefix for all CMP requests
-- **Architecture**: Fastly Compute@Edge with full URL transformation
-- **Implementation**: URL transformation and advanced processing
+* **Customer Usage**: `/api/*` and `/sdk/*` paths directly
+* **Architecture**: Fastly with minimal WASM processing
+* **Implementation**: Simple backend routing with lightweight Rust code
+
+### Option B: Use the main domain
+
+To implement a reverse proxy on the main domain, you will first create a Rust application with URL transformation logic, then compile it to WebAssembly and deploy to Fastly Compute@Edge. The application handles `/consent/*` prefix removal and routes requests to appropriate Didomi backends.
+
+<figure><img src="https://1703900661-files.gitbook.io/~/files/v0/b/gitbook-x-prod.appspot.com/o/spaces%2F-LDh8ZWDZrXs8sc4QKEQ%2Fuploads%2F4JnjvlEiWlmbLxI56ukG%2FServer-side%20Setup%20Miro.jpg?alt=media&#x26;token=19b3c9ec-010b-4d26-8048-e803e10ccec1" alt=""><figcaption></figcaption></figure>
+
+
+
+* **Customer Usage**: `/consent/*` prefix for all CMP requests
+* **Architecture**: Fastly Compute@Edge with full URL transformation
+* **Implementation**: URL transformation and advanced processing
 
 ### Domain vs Subdomain Trade-offs
 
-<aside>
-⚠️
+> When implementing a reverse proxy for the Didomi SDK and its API events, you need to choose between using your main domain or a dedicated subdomain. This choice has important implications for Safari's cookie restrictions.
+For more information, see this [trade-off matrix](https://developers.didomi.io/api-and-platform/domains/reverse-proxy) to select the implementation that suits your requirements.
 
-Only *Consent path routing* option works with either setup. *Direct path routing* option, which occupies the main path, works only with a subdomain dedicated to the Didomi CMP.
+## Implementation guide
 
-</aside>
+[Shared setup steps (both options)](#shared-setup-steps-both-options)
 
-## Architecture overview
+[Option A: Use a subdomain](#option-a-use-a-subdomain)
 
-## Common prerequisites (Both options)
+[Option B: Use the main domain](#option-b-use-the-main-domain)
 
-- Fastly account with Compute@Edge enabled
-- Rust toolchain with WebAssembly support
-- `fastly` CLI tool installed ([installing and configuring Fastly CLI](https://www.fastly.com/documentation/reference/tools/cli/))
-- Domain configured for Fastly service
-- Access to your domain's DNS configuration
+### Common prerequisites (Both options)
 
-## Shared setup steps (both options)
+* Fastly account with Compute@Edge enabled
+* Rust toolchain with WebAssembly support
+* `fastly` CLI tool installed ([installing and configuring Fastly CLI](https://www.fastly.com/documentation/reference/tools/cli/))
+* Domain configured for Fastly service
+* Access to your domain's DNS configuration
 
-### Domain and DNS configuration
+### Shared setup steps (both options)
 
-### 1. Domain setup in Fastly
+#### Domain and DNS configuration
 
-### Add domains
+#### 1. Domain setup in Fastly
+
+#### Add domains
 
 1. **Log into Fastly Dashboard**
 2. **Navigate to**: Configure → Domains
 3. **Add Domains**: Enter both `YOUR_DOMAIN_NAME` and `www.YOUR_DOMAIN_NAME`
 
-### 2. DNS configuration
+#### 2. DNS configuration
 
-### For root domain (A record)
+#### For root domain (A record)
 
 ```bash
 # Configure A records pointing to Fastly IP addresses
-# Get current Fastly IP addresses from: https://docs.fastly.com/en/guides/accessing-fastlys-ip-ranges
+# Get current Fastly IP addresses from: <https://docs.fastly.com/en/guides/accessing-fastlys-ip-ranges>
 
 # Example A records (verify current IPs with Fastly):
 YOUR_DOMAIN_NAME.     300    IN    A    151.101.1.140
@@ -62,51 +78,49 @@ YOUR_DOMAIN_NAME.     300    IN    A    151.101.129.140
 YOUR_DOMAIN_NAME.     300    IN    A    151.101.193.140
 ```
 
-### For subdomain (CNAME Record)
+#### For subdomain (CNAME Record)
 
 ```bash
 # Configure CNAME record for www subdomain
 www.YOUR_DOMAIN_NAME.     300    IN    CNAME    YOUR_DOMAIN_NAME.
 ```
 
-### 3. TLS Certificate configuration
+#### 3. TLS Certificate configuration
 
+![](https://1703900661-files.gitbook.io/~/files/v0/b/gitbook-x-prod.appspot.com/o/spaces%2F-LDh8ZWDZrXs8sc4QKEQ%2Fuploads%2F45TpvoFaOFXnTyFVhaDF%2FScreenshot_2025-07-23_at_5.16.46_PM.png?alt=media\&token=c68c3322-6f1b-464b-b2b5-05b761f684f7)
 
-### Certificate subscription setup
+#### Certificate subscription setup
 
 1. **Navigate to**: TLS Configuration → Certificates
 2. **Create new subscription**
 3. **Configure subscription**:
-    - **Domains**: Enter `YOUR_DOMAIN_NAME, www.YOUR_DOMAIN_NAME` (comma-separated)
-    - **Common Name**: `YOUR_DOMAIN_NAME`
-    - **Certification Authority**: Let's Encrypt
-    - **TLS Configuration**: `HTTP/3 & TLS v1.3 + 0RTT (t.sni)`
+   * **Domains**: Enter `YOUR_DOMAIN_NAME, www.YOUR_DOMAIN_NAME` (comma-separated)
+   * **Common Name**: `YOUR_DOMAIN_NAME`
+   * **Certification Authority**: Let's Encrypt
+   * **TLS Configuration**: `HTTP/3 & TLS v1.3 + 0RTT (t.sni)`
 
-### ACME challenge configuration
+#### ACME challenge configuration
 
 After submitting the certificate request, Fastly will provide an ACME challenge:
 
-1. **Create DNS CNAME record**:
-    
+1.  **Create DNS CNAME record**:
+
     ```bash
     # Example provided by Fastly (replace with your actual values)
     _acme-challenge.YOUR_DOMAIN_NAME    CNAME    YOUR_CHALLENGE_TOKEN.fastly-validations.com
     ```
-    
-2. **Verify DNS propagation**:
-    
+2.  **Verify DNS propagation**:
+
     ```bash
     # Verify the ACME challenge CNAME is propagated
     dig _acme-challenge.YOUR_DOMAIN_NAME CNAME +short
     # Should return: YOUR_CHALLENGE_TOKEN.fastly-validations.com
     ```
-    
 3. **Certificate validation**: Fastly will automatically validate domain ownership and issue the certificate
 
-### Fastly service configuration
+#### Fastly service configuration
 
-
-### 1. Create Fastly service
+#### 1. Create Fastly service
 
 Create a new Compute@Edge service in Fastly dashboard or via CLI:
 
@@ -114,43 +128,45 @@ Create a new Compute@Edge service in Fastly dashboard or via CLI:
 fastly compute init --from=https://github.com/fastly/compute-starter-kit-rust-default
 ```
 
-### 2. Configure backends (Both options use same backends)
+#### 2. Configure backends (Both options use same backends)
+
+![](https://1703900661-files.gitbook.io/~/files/v0/b/gitbook-x-prod.appspot.com/o/spaces%2F-LDh8ZWDZrXs8sc4QKEQ%2Fuploads%2FTazkYRGkMxAniZnChFiw%2F_Screenshot_2025-07-23_at_5.15.34_PM.png?alt=media\&token=4ffa7887-e5c9-4725-a1e3-cf9fda40b8b5)
 
 In the Fastly dashboard, configure two backends:
 
 **Backend 1: Didomi SDK**
 
-- **Name**: `didomi_sdk`
-- **Address**: `sdk.privacy-center.org`
-- **Port**: `443` (HTTPS)
-- **Host Header**: `sdk.privacy-center.org`
-- **Override Host**: Yes
-- **Use SSL**: Yes
-- **SSL SNI Hostname**: `sdk.privacy-center.org`
-- **SSL Certificate Hostname**: `sdk.privacy-center.org`
+* **Name**: `didomi_sdk`
+* **Address**: `sdk.privacy-center.org`
+* **Port**: `443` (HTTPS)
+* **Host Header**: `sdk.privacy-center.org`
+* **Override Host**: Yes
+* **Use SSL**: Yes
+* **SSL SNI Hostname**: `sdk.privacy-center.org`
+* **SSL Certificate Hostname**: `sdk.privacy-center.org`
 
 **Backend 2: Didomi API**
 
-- **Name**: `didomi_api`
-- **Address**: `api.privacy-center.org`
-- **Port**: `443` (HTTPS)
-- **Host Header**: `api.privacy-center.org`
-- **Override Host**: Yes
-- **Use SSL**: Yes
-- **SSL SNI Hostname**: `api.privacy-center.org`
-- **SSL Certificate Hostname**: `api.privacy-center.org`
+* **Name**: `didomi_api`
+* **Address**: `api.privacy-center.org`
+* **Port**: `443` (HTTPS)
+* **Host Header**: `api.privacy-center.org`
+* **Override Host**: Yes
+* **Use SSL**: Yes
+* **SSL SNI Hostname**: `api.privacy-center.org`
+* **SSL Certificate Hostname**: `api.privacy-center.org`
 
----
+***
 
-## Option A: Direct path routing implementation
+### Option A: Use a subdomain
 
-This option uses simple direct routing with minimal WASM code.
+This option uses simple direct routing with minimal WASM code on a subdomain.
 
-### Step 1: Create [fastly.toml](https://github.com/didomi/boilerplate-fastly-reverse-proxy-didomi-cmp/blob/main/fastly.toml)
+#### Step 1: Create [fastly.toml](https://github.com/didomi/boilerplate-fastly-reverse-proxy-didomi-cmp/blob/main/fastly.toml)
 
 ```toml
 # This file describes a Fastly Compute package. To learn more visit:
-# https://www.fastly.com/documentation/reference/compute/fastly-toml
+# <https://www.fastly.com/documentation/reference/compute/fastly-toml>
 
 authors = ["didomi-team"]
 description = "Boilerplate Fastly Reverse Proxy for Didomi CMP"
@@ -164,17 +180,17 @@ service_id = "{{YOUR_SERVICE_ID}}"
   [local_server.backends]
 
     [local_server.backends.didomi_api]
-      url = "https://api.privacy-center.org"
+      url = "<https://api.privacy-center.org>"
 
     [local_server.backends.didomi_sdk]
-      url = "https://sdk.privacy-center.org"
+      url = "<https://sdk.privacy-center.org>"
 
 [scripts]
-  build = "    cargo build --bin boilerplate-fastly-reverse-proxy-didomi-cmp --release --target wasm32-wasip1 --color always\n"
+  build = "    cargo build --bin boilerplate-fastly-reverse-proxy-didomi-cmp --release --target wasm32-wasip1 --color always\\n"
 
 ```
 
-### Step 2: Create [Cargo.toml](https://github.com/didomi/boilerplate-fastly-reverse-proxy-didomi-cmp/blob/main/Cargo.toml)
+#### Step 2: Create [Cargo.toml](https://github.com/didomi/boilerplate-fastly-reverse-proxy-didomi-cmp/blob/main/Cargo.toml)
 
 ```toml
 [package]
@@ -191,7 +207,7 @@ log-fastly = "0.11.5"
 
 ```
 
-### Step 3: Create simple implementation ([src/main_simplified.rs](https://github.com/didomi/boilerplate-fastly-reverse-proxy-didomi-cmp/blob/main/src/main_simplified.rs))
+#### Step 3: Create simple implementation ([src/main\_simplified.rs](https://github.com/didomi/boilerplate-fastly-reverse-proxy-didomi-cmp/blob/main/src/main_simplified.rs))
 
 ```rust
 use fastly::http::{header, Method, StatusCode};
@@ -236,7 +252,7 @@ fn proxy_to_backend(mut req: Request, backend_name: &str) -> Result<Response, Er
 
 ```
 
-### Step 4: Deploy option A
+#### Step 4: Deploy option A
 
 ```bash
 # Build and deploy
@@ -244,7 +260,7 @@ cargo build --release --target wasm32-wasip1
 fastly compute publish
 ```
 
-### Step 5: Test option A
+#### Step 5: Test option A
 
 ```bash
 # Test SDK route
@@ -254,19 +270,19 @@ curl https://YOUR_OWN_DOMAIN/sdk/YOUR_API_KEY/loader.js
 curl https://YOUR_OWN_DOMAIN/api/events
 ```
 
----
+***
 
-## Option B: Consent path routing implementation
+### Option B: Use the main domain
 
 This option includes URL transformation to handle `/consent/*` prefixes.
 
 **Prerequisites:** Use the same backends and DNS setup as Option A above.
 
-### Step 1: Create [fastly.toml](https://github.com/didomi/boilerplate-fastly-reverse-proxy-didomi-cmp/blob/main/fastly.toml) for Option B
+#### Step 1: Create [fastly.toml](https://github.com/didomi/boilerplate-fastly-reverse-proxy-didomi-cmp/blob/main/fastly.toml) for Option B
 
 ```toml
 # This file describes a Fastly Compute package. To learn more visit:
-# https://docs.fastly.com/en/guides/compute-configuration
+# <https://docs.fastly.com/en/guides/compute-configuration>
 
 authors = ["YOUR_EMAIL@YOUR_DOMAIN_NAME"]
 description = "Didomi CMP Consent Path Routing"
@@ -282,13 +298,13 @@ rust_target = "wasm32-wasip1"
   [local_server.backends]
 
     [local_server.backends.didomi_sdk]
-    url = "https://sdk.privacy-center.org"
+    url = "<https://sdk.privacy-center.org>"
 
     [local_server.backends.didomi_api]
-    url = "https://api.privacy-center.org"
+    url = "<https://api.privacy-center.org>"
 ```
 
-### Step 2: Create [Cargo.toml](https://github.com/didomi/boilerplate-fastly-reverse-proxy-didomi-cmp/blob/main/Cargo.toml) for Option B
+#### Step 2: Create [Cargo.toml](https://github.com/didomi/boilerplate-fastly-reverse-proxy-didomi-cmp/blob/main/Cargo.toml) for Option B
 
 ```toml
 [package]
@@ -304,7 +320,7 @@ log = "0.4"
 log-fastly = "0.11.5"
 ```
 
-### 3. Main implementation ([src/main.rs](https://github.com/didomi/boilerplate-fastly-reverse-proxy-didomi-cmp/blob/main/src/main.rs))
+#### 3. Main implementation ([src/main.rs](https://github.com/didomi/boilerplate-fastly-reverse-proxy-didomi-cmp/blob/main/src/main.rs))
 
 ```rust
 use fastly::http::{header, Method, StatusCode};
@@ -456,26 +472,26 @@ fn init_logger() {
 }
 ```
 
-## Deployment steps
+### Deployment steps
 
-### 1. Build the application
+#### 1. Build the application
 
 ```bash
 # Build for WebAssembly target
 cargo build --target wasm32-wasip1 --release
 ```
 
-### 2. Test locally
+#### 2. Test locally
 
 ```bash
 # Start local development server
-fastly compute serve
+fastly compute serve --service-id YOUR_SERVICE_ID
 
 # Test CMP endpoints (replace YOUR_API_KEY and NOTICE_ID with actual values, e.g., YOUR_API_KEY=24cd3901-9da4-4643-96a3-9b1c573b5264, NOTICE_ID=J3nR2TTU)
-curl http://127.0.0.1:7676/consent/YOUR_API_KEY/loader.js?target_type=notice&target=NOTICE_ID
+curl <http://127.0.0.1:7676/consent/YOUR_API_KEY/loader.js?target_type=notice&target=NOTICE_ID>
 ```
 
-### 3. Deploy to Fastly
+#### 3. Deploy to Fastly
 
 ```bash
 # Deploy to production
@@ -485,50 +501,35 @@ fastly compute publish
 curl https://YOUR_DOMAIN_NAME/consent/YOUR_API_KEY/loader.js?target_type=notice&target=NOTICE_ID
 ```
 
-## Configuration requirements
+### Configuration requirements
 
-### DNS configuration
+#### DNS configuration
 
 Point your domain/subdomain to Fastly:
 
-- Create a CNAME record pointing to your Fastly service domain
-- Or configure A records to Fastly IP addresses
+* Create a CNAME record pointing to your Fastly service domain
+* Or configure A records to Fastly IP addresses
 
-### SSL/TLS setup
+#### SSL/TLS setup
 
 1. **Upload SSL Certificate** to Fastly (if using custom domain)
 2. **Enable TLS** for both backends
 3. **Configure SNI** for proper SSL handshake
 
-### Headers and caching
+#### Headers and caching
 
-### For SDK resources (`/consent/*`):
+#### For SDK resources (`/consent/*`):
 
-- **Cache TTL**: 3600 seconds (1 hour)
-- **Vary Header**: Accept-Encoding, Accept-Language
-- **CORS**: Enabled for cross-origin requests
+* **Cache TTL**: 3600 seconds (1 hour)
+* **Vary Header**: Accept-Encoding, Accept-Language
+* **CORS**: Enabled for cross-origin requests
 
-### For API endpoints (`/consent/api/*`):
+#### For API endpoints (`/consent/api/*`):
 
-- **Cache TTL**: 0 (no caching)
-- **Cache-Control**: no-cache, no-store, must-revalidate
-- **CORS**: Enabled with appropriate headers
+* **Cache TTL**: 0 (no caching)
+* **Cache-Control**: no-cache, no-store, must-revalidate
+* **CORS**: Enabled with appropriate headers
 
-## Testing verification
+***
 
-### 1. CMP functionality test
-
-```bash
-# Test CMP loader (replace YOUR_API_KEY and NOTICE_ID with actual values, e.g., YOUR_API_KEY=24cd3901-9da4-4643-96a3-9b1c573b5264, NOTICE_ID=J3nR2TTU)
-curl "https://YOUR_DOMAIN_NAME/consent/YOUR_API_KEY/loader.js?target_type=notice&target=NOTICE_ID"
-```
-
-This setup provides a production-ready CMP reverse proxy.
-
-# Production Setup vs. Test Configuration
-
-In a realistic production environment, the UI would be hosted on a separate CDN like CloudFront/S3 or similar static hosting service or even in Fastly in a separate project. Fastly would be configured with a backend pointing to your UI hosting service (e.g., ui_backend → [https://your-ui.cloudfront.net](https://your-ui.cloudfront.net/)), and the root path / would route to this backend instead of serving embedded HTML.
-
-For testing purposes, this [boilerplate](https://github.com/didomi/boilerplate-fastly-reverse-proxy-didomi-cmp) includes an embedded HTML template with the Didomi consent notice integration. This allows you to quickly test the consent management functionality without setting up separate UI infrastructure. The template includes the necessary Didomi SDK snippets and demonstrates how the consent notice integrates with your routing logic.
-
-To switch between configurations, simply swap the routing logic in [main.rs](http://main.rs/) between serving the embedded template or proxying to a UI backend.
+> After setting up your reverse proxy, update your Didomi SDK snippet to use your own domain instead of `privacy-center.org`. This ensures that the Didomi assets are served from your configured domain. For more information, see the guide to [serving Didomi assets from your domain](https://developers.didomi.io/cmp/web-sdk/serve-didomi-assets-from-your-domain).
